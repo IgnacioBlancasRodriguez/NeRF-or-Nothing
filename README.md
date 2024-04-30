@@ -1,4 +1,4 @@
 # NeRF-or-Nothing
 NeRF or nothing
 
-Hi from Ryan
+Hi from Ryan lol
