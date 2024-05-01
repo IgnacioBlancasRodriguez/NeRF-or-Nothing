@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch import nn
+from dataset_generation import load_images, generate_training_data
 
 device = (
     "gpu"
@@ -76,14 +77,6 @@ def perform_training():
         torch.save(model.state_dict(), "model.pth")
         print("Saved PyTorch Model State to model.pth")
 
-# Load the list of images
-def load_images(image_list):
-    # Implement image loading and preprocessing here
-    return images
-
-# Generate training data using SFM
-def generate_training_data(images):
-    pass
 # Perform 3D reconstruction using NeRF
 def reconstruct_3d(images):
     # Load the images
