@@ -19,6 +19,47 @@ def positional_encoding(p, L) -> torch.tensor:
         out[i + 1] = torch.cos((2 ** i) * torch.pi * p)
     return out
 
+def generate_ray_t_values(tn, tf, n_bins):
+    lower_bound = torch.linspace(tn, tf, n_bins)
+    upper_bound = torch.cat((lower_bound[1:], lower_bound[-1]), 0)
+    u = torch.rand(n_bins)
+    
+    return lower_bound + (upper_bound - lower_bound) * u
+
+def generate_ray_positions(o, d, t, n_bins, batch_size):
+    # Generates the ray positions
+    # o : origin position of the ray
+    # d : Direction of the ray
+    # t : array of t values of the ray
+    expanded_t = t.expand(batch_size, -1) # [batch_size, n_bins]
+    # o : [batch_size, 3]
+    # o_expanded : [batch_size, n_bins, 3]
+    o_expanded = o.unsqueeze(1).expand(-1, n_bins, -1) #[batch_size, n_bins, 3] 
+    d_expanded = d.unsqueeze(1).expand(-1, n_bins, -1) #[batch_size, n_bins, 3]
+    return (o_expanded + d_expanded * t).reshape(-1, 3)
+
+
+def cummulated_transmitance(distances, densities, N):
+    for i in range(0, N):
+        pass
+
+def s(origins, directions, tn, tf, n_bins, batch_size, nerf_model):
+    t = generate_ray_positions(tn, tf, n_bins)
+
+    x = generate_ray_positions(origins, directions, t, n_bins, batch_size)
+    colors, densities = nerf_model(x,
+        directions.unsqueeze(1).expand(-1, n_bins, -1).reshape(-1, 3))
+    colors, densities = colors.reshape(
+        batch_size, n_bins, 3), densities.reshape(batch_size, n_bins)
+    distances_transmitance = torch.cat((0, t[1:] - t[:-1]), 0)
+    distances = torch.cat(
+        (distances_transmitance[1:],
+         ((tf + torch.rand(1) * (1/n_bins) * (tf - tn)) - t[-1])), 0)
+    
+    T = cummulated_transmitance(distances_transmitance, densities)
+    return T * (1 - torch.exp(-1 * densities * distances)) * colors
+
+
 # Define the NeRF model
 class NeRFModel(nn.Module):
     def __init__(self, L_pos=10, L_dir=4, num_percep_layer=256):
