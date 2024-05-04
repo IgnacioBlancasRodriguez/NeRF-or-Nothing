@@ -40,10 +40,11 @@ def generate_ray_positions(o, d, t, n_bins, batch_size):
 
 
 def cummulated_transmitance(distances, densities, N):
-    for i in range(0, N):
-        pass
+    densities_transposed = torch.cat((0, densities[1:]))
+    T_i = torch.exp(distances * densities_transposed)
+    return 1 / torch.cumprod(T_i, dim=0)
 
-def s(origins, directions, tn, tf, n_bins, batch_size, nerf_model):
+def get_rays_total_colors(origins, directions, tn, tf, n_bins, batch_size, nerf_model):
     t = generate_ray_positions(tn, tf, n_bins)
 
     x = generate_ray_positions(origins, directions, t, n_bins, batch_size)
@@ -57,6 +58,7 @@ def s(origins, directions, tn, tf, n_bins, batch_size, nerf_model):
          ((tf + torch.rand(1) * (1/n_bins) * (tf - tn)) - t[-1])), 0)
     
     T = cummulated_transmitance(distances_transmitance, densities)
+
     return T * (1 - torch.exp(-1 * densities * distances)) * colors
 
 
@@ -103,8 +105,24 @@ class NeRFModel(nn.Module):
         
         return color, density
 
-def train():
-    pass
+def train(nerf_model, optimizer, data_loader, device, tn=0, tf=0.5, n_bins=192):
+    size = len(data_loader.dataset)
+    for batch_num, batch in enumerate(data_loader):
+        origins = batch[:,:3].to(device)
+        directions = batch[:,3:6].to(device)
+        ground_truths = batch[:,6:].to(device)
+
+        generated_ray_colors = get_rays_total_colors(
+            origins, directions, tn, tf, n_bins, batch.shape[0], nerf_model)
+        loss = ((ground_truths - generated_ray_colors)**2).sum()
+        
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        if batch % 100 == 0:
+            loss, current = loss.item(), (batch_num + 1) * len(X)
+            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
 def test():
     pass
