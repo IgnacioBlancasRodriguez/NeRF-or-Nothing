@@ -80,7 +80,10 @@ def load_image_transforms(transforms_path, filepath_to_img_id):
 
     return images
 
-
+#from colmap and colmap2nerf, you should input file paths to:
+    # images.txt
+    # transforms.json
+    # points3D.txt
 def generate_training_data(images_path, transforms_path, points_path):
     n = 0.1 #near plane
     f = 3.0 #far plane
@@ -129,6 +132,8 @@ def generate_training_data(images_path, transforms_path, points_path):
 
     return data
 
+# loads existing model-ready data in the specified 9 column format. 
+    # data_path: path to txt file for data
 def load_training_data(data_path):
     data = []
     with open(data_path, 'r') as file:
@@ -143,5 +148,4 @@ def load_training_data(data_path):
     
 generate_training_data("datasets/person-hall/colmap_text/images.txt",
                        "datasets/person-hall/transforms.json",
-                       "datasets/person-hall/colmap_text/points3D.txt",)
-
+                       "datasets/person-hall/colmap_text/points3D.txt")
