@@ -136,6 +136,8 @@ def train(nerf_model, optimizer, scheduler, data_loader, device='cpu', hn=0, hf=
             if batch_num % 5 == 0:
                 loss, current = loss.item(), (batch_num + 1) * len(batch)
                 print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+                if loss<100:
+                    break
         scheduler.step()
 
         for img_index in range(200):
@@ -146,8 +148,8 @@ def train(nerf_model, optimizer, scheduler, data_loader, device='cpu', hn=0, hf=
 if __name__ == '__main__':
     device = 'cuda'
     
-    training_dataset = torch.from_numpy(np.load('drive/MyDrive/person_training.pkl', allow_pickle=True))
-    testing_dataset = torch.from_numpy(np.load('drive/MyDrive/person_testing.pkl', allow_pickle=True))
+    training_dataset = torch.from_numpy(np.load('drive/MyDrive/fern_train1.pkl', allow_pickle=True))
+    testing_dataset = torch.from_numpy(np.load('drive/MyDrive/fern_test1.pkl', allow_pickle=True))
     model = NerfModel(hidden_dim=256).to(device)
     model_optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(model_optimizer, milestones=[2, 4, 8], gamma=0.5)

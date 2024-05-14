@@ -81,42 +81,28 @@ def load_image_transforms(transforms_path, filepath_to_img_id):
 
     return images
 
-def ndc_rays(H, W, focal, near, rays_o, rays_d):
-    """Normalized device coordinate rays.
+# def ndc_rays(H, W, focal, near, rays_o, rays_d):
+def convert_to_ndc(origins, directions, focal, w, h, near=1.):
+  """Convert a set of rays to NDC coordinates."""
+  # Shift ray origins to near plane
+  t = -(near + origins[..., 2]) / directions[..., 2]
+  origins = origins + t[..., None] * directions
 
-    Space such that the canvas is a cube with sides [-1, 1] in each axis.
+  dx, dy, dz = tuple(np.moveaxis(directions, -1, 0))
+  ox, oy, oz = tuple(np.moveaxis(origins, -1, 0))
 
-    Args:
-      H: int. Height in pixels.
-      W: int. Width in pixels.
-      focal: float. Focal length of pinhole camera.
-      near: float or array of shape[batch_size]. Near depth bound for the scene.
-      rays_o: array of shape [batch_size, 3]. Camera origin.
-      rays_d: array of shape [batch_size, 3]. Ray direction.
+  # Projection
+  o0 = -((2 * focal) / w) * (ox / oz)
+  o1 = -((2 * focal) / h) * (oy / oz)
+  o2 = 1 + 2 * near / oz
 
-    Returns:
-      rays_o: array of shape [batch_size, 3]. Camera origin in NDC.
-      rays_d: array of shape [batch_size, 3]. Ray direction in NDC.
-    """
-    # Shift ray origins to near plane
-    t = -(near + rays_o[..., 2]) / rays_d[..., 2]
-    rays_o = rays_o + np.expand_dims(t, axis=-1) * rays_d
+  d0 = -((2 * focal) / w) * (dx / dz - ox / oz)
+  d1 = -((2 * focal) / h) * (dy / dz - oy / oz)
+  d2 = -2 * near / oz
 
-    # Projection
-    o0 = -1./(W/(2.*focal)) * rays_o[..., 0] / rays_o[..., 2]
-    o1 = -1./(H/(2.*focal)) * rays_o[..., 1] / rays_o[..., 2]
-    o2 = 1. + 2. * near / rays_o[..., 2]
-
-    d0 = -1./(W/(2.*focal)) * \
-        (rays_d[..., 0]/rays_d[..., 2] - rays_o[..., 0]/rays_o[..., 2])
-    d1 = -1./(H/(2.*focal)) * \
-        (rays_d[..., 1]/rays_d[..., 2] - rays_o[..., 1]/rays_o[..., 2])
-    d2 = -2. * near / rays_o[..., 2]
-
-    rays_o = np.stack([o0, o1, o2], -1)
-    rays_d = np.stack([d0, d1, d2], -1)
-
-    return rays_o, rays_d
+  origins = np.stack([o0, o1, o2], -1)
+  directions = np.stack([d0, d1, d2], -1)
+  return origins, directions
 
 #from colmap and colmap2nerf, you should input file paths to:
     # images.txt
@@ -160,21 +146,19 @@ def generate_training_data(images_path, transforms_path, points_path):
 
             rgbs.append(rgb)
 
-            
         if(count%1000==0):
             pct = (1.0*count)/num_points*100.0
             print(pct,'%')
         count+=1
     
     assert(len(rgbs)==len(rays_d) and len(rays_d)==len(rays_o))
-    
-
-    ndc_o, ndc_d = ndc_rays(transforms["h"],transforms["w"],fl,0.01,np.asarray(rays_o),np.asarray(rays_d))
-
+    ndc_o, ndc_d = rays_o
+    # ndc_o, ndc_d = convert_to_ndc(transforms["h"],transforms["w"],fl,0.01,np.asarray(rays_o),np.asarray(rays_d))
+    # ndc_o, ndc_d = convert_to_ndc(np.asarray(rays_o),np.asarray(rays_d),fl/100.0,transforms["w"],transforms["h"],1.01)
     for i in range(len(ndc_o)):
         data.append([ndc_o[i][0],ndc_o[i][1],ndc_o[i][2],
                     ndc_d[i][0],ndc_d[i][1],ndc_d[i][2],
-                    rgbs[i][0],rgbs[i][1],rgbs[i][2]])
+                    rgbs[i][0]/255.0,rgbs[i][1]/255.0,rgbs[i][2]/255.0])
         
     data = np.asarray(data)
     np.savetxt("data_ndc.txt",data,fmt='%f')
