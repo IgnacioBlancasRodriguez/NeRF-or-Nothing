@@ -235,6 +235,15 @@ def main():
 
 if __name__ == '__main__':
     try:
-        main()
+        # main()
+
+        testing_dataset = torch.from_numpy(np.load('testing_data.pkl', allow_pickle=True))
+        model = NeRFModel().to(device)
+        model.load_state_dict(torch.load("model.pth", map_location=torch.device("cpu")))
+
+        model.eval()
+        with torch.no_grad():
+            for img_idx in range(200):
+                test(model, 2, 6, testing_dataset, 10, img_idx, 192, 400, 400)
     except KeyboardInterrupt:
         quit()
