@@ -21,7 +21,7 @@ def positional_encoding(p, L) -> torch.tensor:
         out.append(torch.cos(2 ** j * p))
     return torch.cat(out, dim=1)
 
-def get_perturbed_t_values(tn, tf, n_bins, device, batch_size):
+def get_perturbed_t_values(tn, tf, n_bins, device, batch_size) -> torch.tensor:
     # Unperturbed t-values
     t = torch.linspace(tn, tf, n_bins, device=device).expand(batch_size, n_bins)
 
@@ -42,7 +42,7 @@ def get_perturbed_t_values(tn, tf, n_bins, device, batch_size):
     
     return preturbed_t
 
-def generate_ray_positions(o, d, t):
+def generate_ray_positions(o, d, t) -> torch.tensor:
     # Assuming the following parameter dimentons
     # o : [batch_size, 3]
     # d : [batch_size, 3]
@@ -54,7 +54,7 @@ def generate_ray_positions(o, d, t):
     return (o_expanded + d_expanded * t_expanded).reshape(-1, 3)
 
 
-def cummulated_transmitance(alphas):
+def cummulated_transmitance(alphas) -> torch.tensor:
     # We first compute the original, unshifted product of exponentials
     unshifted_prod = torch.cumprod(alphas, dim=1)
     # We then shift the values to account for the i - 1 in the summation for each T_i
@@ -64,7 +64,7 @@ def cummulated_transmitance(alphas):
         dim = -1)
     return shifted_prod
 
-def get_rays_total_colors(nerf_model, origins, directions, tn, tf, n_bins):
+def get_rays_total_colors(nerf_model, origins, directions, tn, tf, n_bins) -> torch.tensor:
     device = origins.device
     batch_size = origins.shape[0]
     t = get_perturbed_t_values(tn, tf, n_bins, device, origins.shape[0])
@@ -126,7 +126,7 @@ class NeRFModel(nn.Module):
 
         self.relu = nn.ReLU()
 
-    def forward(self, x, d):
+    def forward(self, x, d) -> tuple[torch.tensor, torch.tensor]:
         # Implement the forward pass of your NeRF model here
         x_encoded = positional_encoding(x, self.pos_dim_L)
         d_encoded = positional_encoding(d, self.dir_dim_L)
@@ -145,7 +145,7 @@ class NeRFModel(nn.Module):
         
         return color, density
 
-def train(nerf_model, optimizer, data_loader, device, tn=0, tf=1, n_bins=192):
+def train_batch(nerf_model, optimizer, data_loader, device, tn=0, tf=1, n_bins=192) -> None:
     nerf_model.train()
     size = len(data_loader.dataset)
     for batch_num, batch in enumerate(data_loader):
@@ -165,7 +165,7 @@ def train(nerf_model, optimizer, data_loader, device, tn=0, tf=1, n_bins=192):
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
 @torch.no_grad
-def test(model, tn, tf, dataset, batch_size=10, idx=0, n_bins=192, H=400, W=400):
+def test_image(model, tn, tf, dataset, batch_size=10, idx=0, n_bins=192, H=400, W=400) -> None:
     model.eval()
     ray_origins = dataset[idx * H * W: (idx + 1) * H * W, :3]
     ray_directions = dataset[idx * H * W: (idx + 1) * H * W, 3:6]
@@ -186,24 +186,20 @@ def test(model, tn, tf, dataset, batch_size=10, idx=0, n_bins=192, H=400, W=400)
     plt.close()
 
 def perform_training(model, optimizer, scheduler, train_dataloader, test_data,
-                     n_epochs, device, tn, tf, n_bins, H, W):
+                     n_epochs, device, tn, tf, n_bins, H, W) -> None:
     epochs = n_epochs
     for t in range(epochs):
         print(f"Epoch {t+1}\n-------------------------------")
-        train(model, optimizer, train_dataloader, device, tn=tn, tf=tf, n_bins=192)
+        train_batch(model, optimizer, train_dataloader, device, tn=tn, tf=tf, n_bins=192)
         scheduler.step()
         
         for img_idx in range(4):
-            test(model, tn, tf, test_data, 10, img_idx, n_bins, H, W)
+            test_image(model, tn, tf, test_data, 10, img_idx, n_bins, H, W)
         torch.save(model.state_dict(), "model.pth")
         print("Saved PyTorch Model State to model.pth")
 
 # Perform 3D reconstruction using NeRF
-def perform_NeRF(image):
-    # Load the images
-    training_dataset = torch.from_numpy(np.load('training_data.pkl', allow_pickle=True))
-    testing_dataset = torch.from_numpy(np.load('testing_data.pkl', allow_pickle=True))
-
+def perform_NeRF(training_dataset, testing_dataset):
     # Initialize the NeRF model
     model = NeRFModel().to(device)
     model_optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
@@ -212,38 +208,27 @@ def perform_NeRF(image):
     # Implement the training loop here
     scheduler = torch.optim.lr_scheduler.MultiStepLR(model_optimizer, milestones=[2, 4, 8], gamma=0.5)
     data_loader = DataLoader(training_dataset, batch_size=1024, shuffle=True)
-    perform_training(model, model_optimizer, scheduler, data_loader, testing_dataset, n_epochs=16, device=device, tn=2, tf=6, n_bins=192, H=400,
-          W=400)
-
-    # Return the reconstructed 3D model
+    perform_training(model, model_optimizer, scheduler, data_loader,
+                     testing_dataset, n_epochs=16, device=device, tn=2, tf=6, n_bins=192, H=400, W=400)
 
 # Main function
-def main():
-    # Define the list of images
-    # image_list = []
-    
-    # last_img_idx = 1000
-    # img_base_name = "image"
-    # for i in range(last_img_idx):
-    #     image_list.append(img_base_name + str(i) + ".jpg")
+def main(mode="train"):
+    testing_dataset = torch.from_numpy(np.load('testing_data.pkl', allow_pickle=True))
 
-    # Reconstruct 3D model using NeRF
-    reconstructed_model = perform_NeRF([])
-
-    # Save the reconstructed 3D model
-    # Implement saving the 3D model here
-
-if __name__ == '__main__':
-    try:
-        # main()
-
-        testing_dataset = torch.from_numpy(np.load('testing_data.pkl', allow_pickle=True))
+    if mode == "train":
+        training_dataset = torch.from_numpy(np.load('training_data.pkl', allow_pickle=True))
+        perform_NeRF(training_dataset, testing_dataset)
+    elif mode == "test":
         model = NeRFModel().to(device)
-        model.load_state_dict(torch.load("model.pth", map_location=torch.device("cpu")))
+        model.load_state_dict(torch.load("model.pth", map_location=torch.device(device)))
 
         model.eval()
         with torch.no_grad():
             for img_idx in range(200):
-                test(model, 2, 6, testing_dataset, 10, img_idx, 192, 400, 400)
+                test_image(model, 2, 6, testing_dataset, 10, img_idx, 192, 400, 400)
+
+if __name__ == '__main__':
+    try:
+        main("test")
     except KeyboardInterrupt:
         quit()
