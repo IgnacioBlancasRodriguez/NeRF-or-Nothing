@@ -1,6 +1,8 @@
 import json
 import numpy as np
 
+## ============= THIS FILE IS OBSOLETE: use data_gen.py ====================== ##
+
 def load_points(file_path):
     points = []
     with open(file_path, 'r') as file:
